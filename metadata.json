@@ -1,0 +1,9 @@
+{
+  "name": "NOVA - Haroon Khan AI Mobile Assistant",
+  "description": "Elite mobile AI assistant with Urdu/Hindi/English voice, live camera vision, deep phone control, app automation, and Android system integration.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

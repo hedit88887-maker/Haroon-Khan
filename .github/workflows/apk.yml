@@ -18,6 +18,95 @@ jobs:
       - run: npm i @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
       - run: npx cap init MyApp com.mera.app --web-dir dist
       - run: npx cap add android
+      - name: Add assistant service
+        run: |
+          D=android/app/src/main/java/com/mera/app
+          mkdir -p $D android/app/src/main/res/xml
+
+          cat > $D/MyInteractionService.java << 'EOF'
+          package com.mera.app;
+          import android.service.voice.VoiceInteractionService;
+          public class MyInteractionService extends VoiceInteractionService {}
+          EOF
+
+          cat > $D/MySessionService.java << 'EOF'
+          package com.mera.app;
+          import android.os.Bundle;
+          import android.service.voice.VoiceInteractionSession;
+          import android.service.voice.VoiceInteractionSessionService;
+          public class MySessionService extends VoiceInteractionSessionService {
+            @Override
+            public VoiceInteractionSession onNewSession(Bundle args) {
+              return new MySession(this);
+            }
+          }
+          EOF
+
+          cat > $D/MySession.java << 'EOF'
+          package com.mera.app;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.os.Bundle;
+          import android.service.voice.VoiceInteractionSession;
+          public class MySession extends VoiceInteractionSession {
+            public MySession(Context c) { super(c); }
+            @Override
+            public void onShow(Bundle args, int flags) {
+              super.onShow(args, flags);
+              Intent i = new Intent(getContext(), MainActivity.class);
+              i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+              startAssistantActivity(i);
+              finish();
+            }
+          }
+          EOF
+
+          cat > $D/MyRecognitionService.java << 'EOF'
+          package com.mera.app;
+          import android.content.Intent;
+          import android.speech.RecognitionService;
+          public class MyRecognitionService extends RecognitionService {
+            @Override protected void onStartListening(Intent i, Callback c) {}
+            @Override protected void onCancel(Callback c) {}
+            @Override protected void onStopListening(Callback c) {}
+          }
+          EOF
+
+          cat > android/app/src/main/res/xml/interaction_service.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+              android:sessionService="com.mera.app.MySessionService"
+              android:recognitionService="com.mera.app.MyRecognitionService"
+              android:supportsAssist="true" />
+          EOF
+
+          python3 - << 'EOF'
+          p = 'android/app/src/main/AndroidManifest.xml'
+          s = open(p).read()
+          svc = '''
+              <service android:name="com.mera.app.MyInteractionService"
+                  android:permission="android.permission.BIND_VOICE_INTERACTION"
+                  android:exported="true">
+                  <meta-data android:name="android.voice_interaction"
+                      android:resource="@xml/interaction_service" />
+                  <intent-filter>
+                      <action android:name="android.service.voice.VoiceInteractionService" />
+                  </intent-filter>
+              </service>
+              <service android:name="com.mera.app.MySessionService"
+                  android:permission="android.permission.BIND_VOICE_INTERACTION"
+                  android:exported="true" />
+              <service android:name="com.mera.app.MyRecognitionService"
+                  android:exported="true">
+                  <intent-filter>
+                      <action android:name="android.speech.RecognitionService" />
+                      <category android:name="android.intent.category.DEFAULT" />
+                  </intent-filter>
+              </service>
+          '''
+          s = s.replace('</application>', svc + '</application>')
+          open(p, 'w').write(s)
+          EOF
       - run: npx cap sync android
       - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
